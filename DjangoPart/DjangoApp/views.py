@@ -1,5 +1,6 @@
 from django.http import JsonResponse
 from django.views import View
+from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -42,7 +43,8 @@ class Step1RegistrationView(View):
 class Step2VerificationView(View):
     def post(self, request):
         # 1. Получаем введенный код
-        user_code = request.POST.get('code')
+        data = json.loads(request.body)
+        user_code = data.get('code')
 
         # 2. Получаем данные из сессии
         registration_data = request.session.get('registration_data')
@@ -78,7 +80,6 @@ class Step2VerificationView(View):
             if 'registration_session_id' in request.session:
                 del request.session['registration_session_id']
 
-            # TODO: Можете выполнить автоматический логин здесь
             # login(request, user)
 
             return JsonResponse({'status': 'success', 'message': 'Регистрация завершена'})
