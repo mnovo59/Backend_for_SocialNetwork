@@ -1,3 +1,6 @@
-.venv
 .idea
 __pycache__
+.venv/bin
+.venv/lib
+CHACHEDIR.TAG
+pyvenv.cfg
