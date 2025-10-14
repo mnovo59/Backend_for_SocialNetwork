@@ -5,7 +5,23 @@ from django.contrib.auth.hashers import make_password
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from .utils import generate_verification_code, send_verification_email
+from django.core.cache import cache
 import json
+
+
+# def get_session(request):
+#     # Чтение данных из сессии
+#     email = request.session.get('email')
+#     username = request.session.get('username')
+#     return email, username
+#
+# def set_session(request, verification_code):
+#     # Запись данных в сессию
+#     request.session['username'] = (json.loads(request.body)).get('login')
+#     request.session['email'] = (json.loads(request.body)).get('email')
+#     request.session['password'] = make_password((json.loads(request.body)).get('password'))
+#     request.session['verification_code'] = verification_code
+#     request.session.set_expiry(3600)  # срок жизни 1 час
 
 @method_decorator(csrf_exempt, name='dispatch')
 class Step1RegistrationView(View):
@@ -22,13 +38,9 @@ class Step1RegistrationView(View):
         # 2. Генерируем код верификации
         verification_code = generate_verification_code()
 
-        # 3. Сохраняем данные в сессии
-        request.session['registration_data'] = {
-            'username': username,
-            'email': email,
-            'password': make_password(password),
-            'verification_code': verification_code,
-        }
+        cache.set_many({"username": username, 'password' : make_password(password), 'email' : email, 'verification_code' : verification_code}, 300)
+        # set_session(request, verification_code)
+
 
         # Исправлено: убрана строка с req_session.id, так как эта переменная не определена
         request.session['registration_session_id'] = str(request.session.session_key)
@@ -40,21 +52,25 @@ class Step1RegistrationView(View):
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': 'Ошибка отправки email'}, status=500)
 
+@method_decorator(csrf_exempt, name='dispatch')
 class Step2VerificationView(View):
     def post(self, request):
-        # 1. Получаем введенный код
+        # Получаем введенный код
         data = json.loads(request.body)
         user_code = data.get('code')
 
-        # 2. Получаем данные из сессии
-        registration_data = request.session.get('registration_data')
-        session_id = request.session.get('registration_session_id')
+        stored_code = cache.get('verification_code')
 
-        # Способ 1: Проверка через сессию (менее надежный)
-        if registration_data:
-            stored_code = registration_data.get('verification_code')
-            if user_code == stored_code:
-                return self._complete_registration(request, registration_data)
+        # Получаем данные из сессии
+        # stored_code = request.session.get('verification_code')
+        # session_id = request.session.get('registration_session_id')
+        # print(get_session(request))
+
+        print(user_code, stored_code)
+        # Проверка через сессию
+        if user_code == stored_code:
+            print('успех')
+            return JsonResponse({'status': 'success', 'message': 'Успешная регистрация'})
 
 
         return JsonResponse({'status': 'error', 'message': 'Неверный код'})
@@ -79,8 +95,6 @@ class Step2VerificationView(View):
                 del request.session['registration_data']
             if 'registration_session_id' in request.session:
                 del request.session['registration_session_id']
-
-            # login(request, user)
 
             return JsonResponse({'status': 'success', 'message': 'Регистрация завершена'})
 
